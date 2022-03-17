@@ -50,6 +50,9 @@ html = urlopen(url, context=ctx).read()
 #parse returned json
 stat = json.loads(html.decode('utf-8'))
 
+#manually add person playing for testing
+# stat[0]["playing"] = 1
+
 # create string that will help update values in bulk query
 # sting in the format "('name', status)"
 uds =""
@@ -88,6 +91,8 @@ action = {}
 action["1"] = "is now playing on Lichess".upper()
 action["0"] = "has stopped playing"
 shout = ""
+# build string of that will be pushed to discord
+# we axed the stopped playing prompt, but querying only games that have started in com_stat
 mycursor.execute("select * from com_stat")
 for i in mycursor: 
     shout = shout +i[0].upper() + " " + action[str(i[1])] 
@@ -96,5 +101,12 @@ for i in mycursor:
 
 # fixing fense post
 shout = shout[:len(shout)-2]
+
+# get list of users who wants to be notified
+dis_id = "select distinct f.discord_id from com_stat c inner join followers f on c.name = f.lichess_name"
+mycursor.execute(dis_id)
+for y in mycursor: shout = shout + " " + y[0]
+
+
 
 if len(shout)>1: webhook.send(shout)
