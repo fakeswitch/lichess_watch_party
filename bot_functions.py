@@ -1,8 +1,16 @@
 # companion file to help keep list_manager.py tidy
-from sqlite3 import dbapi2
+
+from audioop import mul
 import mysql.connector
 import json
 import ndjson
+import chess_tables as ct
+import random 
+import chess
+import praw 
+import helper as hf
+import asyncio
+import base64
 
 #----------- dealign with web settings ---------------
 # Ignore SSL certificate errors
@@ -11,6 +19,17 @@ import ssl
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
+
+
+#----------- reddit credentials-------------
+reddit = praw.Reddit(
+    client_id = hf.rid,
+    client_secret = hf.rsecret,
+    password = hf.rpwd,
+    user_agent = hf.rua,
+    username = hf.run,
+)
+
 
 # helper function to keep code tidy
 def get_db():
@@ -206,9 +225,9 @@ def get_top_open(args_list):
     lichess = args_list[0]
     tc = "playing in all Time Controlls"
     if len(args_list) < 2:
-        url = ' https://explorer.lichess.ovh/player?player={}&color=white'.format(lichess)
+        url = 'https://explorer.lichess.ovh/player?player={}&color=white'.format(lichess)
     else:
-        url = ' https://explorer.lichess.ovh/player?player={}&color=white&speeds={}'.format(lichess,args_list[1])
+        url = 'https://explorer.lichess.ovh/player?player={}&color=white&speeds={}'.format(lichess,args_list[1])
         pretty_tc = args_list[1].replace(",", ", ")
         tc = "playing in {}".format(pretty_tc)
     html = urlopen(url, context=ctx).read()
@@ -226,6 +245,89 @@ def get_top_open(args_list):
         top3 += "\n1. {} with performace of {}, and record of +{} -{} ={}".format(move, perform, white, black, draws)
     return top3.strip()
 
+# expected input in the form of list: lichess_name, whites_first_move, time_controll
+def get_top_open_black(args_list):
+    ret_str = "Please provide a lichess username, legal first move, and optional time controll"
+    if args_list[1].lower() in ct.legal_first_moves.keys():
+        lichess = args_list[0]
+        if args_list[1].lower().startswith("n"):
+            pfm = args_list[1].capitalize()
+        else:
+            pfm = args_list[1].lower()
+        wm = ct.legal_first_moves.get(args_list[1].lower())
+        tc = "playing in all Time Controlls"
+        if len(args_list) < 3:
+            url = 'https://explorer.lichess.ovh/player?player={}&color=black&play={}'.format(lichess,wm)
+        else:
+            url = 'https://explorer.lichess.ovh/player?player={}&color=black&play={}&speeds={}'.format(lichess,wm, args_list[2])
+            pretty_tc = args_list[2].replace(",", ", ")
+            tc = "playing in {}".format(pretty_tc)
+        html = urlopen(url, context=ctx).read()
+        stat = ndjson.loads(html.decode('utf-8'))
+        rg = 3
+        if len(stat[0].get('moves')) < 3: 
+            rg = len(stat[0].get('moves'))
+        top3 ="Top {} responses against {} (by times played) for {} {}:".format(rg, pfm,lichess, tc)
+        for i in range(rg):
+            move = stat[0].get('moves')[i].get('san')
+            perform = stat[0].get('moves')[i].get('performance')
+            white = stat[0].get('moves')[i].get('white')
+            black =stat[0].get('moves')[i].get('black')
+            draws = stat[0].get('moves')[i].get('draws')
+            top3 += "\n1. {} {} with performace of {}, and record of +{} -{} ={}".format(pfm, move, perform, black, white, draws)
+        ret_str = top3.strip()
+    return ret_str
+
+
+# not working on pi,  comment out for now
+# v2 of get openings, to include options for both colors, and move list
+def get_openings(lichess, color, moves, speed):
+    #covert moves to fen string
+    holder = moves.strip()
+    pfm = "from starting position" 
+    if moves == "all" : play = ""
+    else:
+        ind_moves =[]
+        n_move = 0
+        for i in range(len(holder)):
+            if holder[i].isnumeric():
+                ind_moves.append(holder[n_move:i+1])
+                n_move = i+1
+        board = chess.Board()
+        for i in ind_moves: board.push_san(i)
+        play = ""
+        for i in board.move_stack: play += "," + str(i)
+        play = "&play=" +play[1:]
+        pfm = "from " + moves.strip()
+    tc = "playing in all Time Controlls"
+    if speed == "all" : speed =""
+    else: 
+        pretty_tc = speed.replace(",", ", ")
+        tc = "playing in {}".format(pretty_tc)
+        speed = "&speeds=" + speed
+    url = 'https://explorer.lichess.ovh/player?player={}&color={}{}{}'.format(lichess, color, play, speed)
+    html = urlopen(url, context=ctx).read()
+    stat = ndjson.loads(html.decode('utf-8'))
+    eco = stat[0].get("opening", None)
+    if eco is not None: 
+        eco = "(" + eco.get("name") +")"
+    else:
+        eco = ""
+    rg = 3
+    if len(stat[0].get('moves')) < 3: 
+        rg = len(stat[0].get('moves'))
+    top3 ="Top {} played moves {}{} for **{}** as **{}** {}:".format(rg, pfm, eco, lichess, color.capitalize(), tc)
+    for i in range(rg):
+        move = stat[0].get('moves')[i].get('san')
+        perform = stat[0].get('moves')[i].get('performance')
+        white = stat[0].get('moves')[i].get('white')
+        black =stat[0].get('moves')[i].get('black')
+        draws = stat[0].get('moves')[i].get('draws')
+        top3 += "\n**{}** with performace of **{}**, White: **{}**, Black: **{}**, Draw: **{}**".format(move, perform, white, black, draws)
+    ret_str = top3.strip()    
+    return ret_str
+
+
 # get current ratings
 def get_cur_ratings(lichess):
     url = 'https://lichess.org/api/user/{}'.format(lichess)
@@ -242,7 +344,6 @@ def get_cur_ratings(lichess):
             ret_string += "\n{}: {} with a RD of {} in {} games".format(i.capitalize(), rating, rd, games)
     except: ret_string = 'Could not find user {}'.format(lichess)
     return ret_string.strip()
-
 
 #---------- silly non chess related functions---------
 def make_haiku():
@@ -277,3 +378,99 @@ def make_haiku():
     mydb.commit()
     haiku = s[0][1].lower().capitalize() +"\n" +l[0][1].lower().capitalize() + "\n" + s[1][1].lower().capitalize()
     return haiku
+
+# magic 8 ball
+def eightball():
+    return random.choice(ct.eight_ball)
+
+# dice rolls!    
+def roll_dice(sides, rolls):
+    roll = []
+    retr_str = "Please provide the number of sides the the dice (>1 and <= 50) and number of rolls (>0 and <=10)"
+    if  1 < int(sides) <= 100 and 0 < int(rolls) <= 10:
+        for i in range(int(rolls)): 
+            roll.append(random.randint(1,int(sides))) 
+        retr_str = "You roll " +str(roll) + " that sums to " + str(sum(roll))
+    return retr_str
+
+# flip a coin
+def coin():
+    roll = ["Heads", "Tails"]
+    return random.choice(roll)
+"""
+# grab a joke from 'http://dadjokes.online/'
+def get_joke():
+    ret_list =[]
+    url = 'http://dadjokes.online/'
+    html = urlopen(url, context=ctx).read()
+    stat = json.loads(html.decode('utf-8'))
+    joke = stat.get("Joke")
+    ret_list.append(joke.get("Opener"))
+    ret_list.append(joke.get("Punchline"))
+    return ret_list 
+
+"""
+# jokes from reddit, for another day
+def get_joke():
+    ret_list = []
+    joke = find_okay_joke()
+    ret_list.append(joke.title)
+    ret_list.append(joke.selftext)
+    return ret_list
+
+
+
+def ask_reddit_for_joke():
+    sub = ["dadjokes", "cleanjokes"]
+    ret = reddit.subreddit(random.choice(sub)).random()
+    return ret
+
+test =  ask_reddit_for_joke()
+
+def find_okay_joke():
+    joke = ask_reddit_for_joke()
+    score = joke.score
+    while score < 10:
+        asyncio.sleep(2)
+        joke =  ask_reddit_for_joke()
+        score = joke.score
+    return joke 
+
+def reddit_aww():
+    sub = random.choice(ct.animal_subreddits)
+    aww =  reddit.subreddit(sub)
+    get_aww = aww.random()
+    img_check = get_aww.url[-3:]
+    while img_check != "jpg":
+        asyncio.sleep(2)
+        get_aww = aww.random()
+        img_check = get_aww.url[-3:]    
+    return get_aww.url
+
+
+# grab a joke from 'http://opentdb.com'
+def get_trivia(cat):
+    ret_list =[]
+    url = 'https://opentdb.com/api.php?amount=1&encode=base64'
+    if cat != 0:
+        url += "&category={}".format(cat)
+    html = urlopen(url, context=ctx).read()
+    stat = json.loads(html.decode('utf-8'))
+    ret_list.append(base64.b64decode(stat["results"][0]["question"]).decode('utf-8'))
+    ret_list.append(base64.b64decode(stat["results"][0]["correct_answer"]).decode('utf-8'))
+    if ret_list[0].strip().upper().find("WHICH") != -1 :
+        mult_answ =[]
+        for i in stat['results'][0]["incorrect_answers"]:mult_answ.append(base64.b64decode(i).decode('utf-8'))
+        mult_answ.append(ret_list[1])
+        random.shuffle(mult_answ)
+        ret_list[0] += "\n" + ", ".join(mult_answ)
+    return ret_list 
+
+# horoscope function
+def get_horoscope(sign):
+    #with open(r'horo.json') as f:
+        #scope_dict = json.load(f)
+    if sign.strip() in ct.scope_dict.keys():
+        return random.choice(ct.scope_dict[sign.strip()])
+    else:
+        return "i can only give horoscopes for " + ", ".join(ct.scope_dict.keys())
