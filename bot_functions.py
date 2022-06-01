@@ -11,6 +11,7 @@ import praw
 import helper as hf
 import asyncio
 import base64
+import flickrapi
 
 #----------- dealign with web settings ---------------
 # Ignore SSL certificate errors
@@ -35,11 +36,15 @@ reddit = praw.Reddit(
 def get_db():
     mydb = mysql.connector.connect(
         host="localhost",
-        user="root",
-        password="",
+        user= "root",
+        password= '',
         database = "watch_lichess"
     )
     return mydb
+
+#----------- flickr credentials-------------
+flickr = flickrapi.FlickrAPI(hf.ham_key, hf.ham_sec, format='parsed-json')
+
 
 # returns list of players with status = True
 def get_in_play():
@@ -397,19 +402,7 @@ def roll_dice(sides, rolls):
 def coin():
     roll = ["Heads", "Tails"]
     return random.choice(roll)
-"""
-# grab a joke from 'http://dadjokes.online/'
-def get_joke():
-    ret_list =[]
-    url = 'http://dadjokes.online/'
-    html = urlopen(url, context=ctx).read()
-    stat = json.loads(html.decode('utf-8'))
-    joke = stat.get("Joke")
-    ret_list.append(joke.get("Opener"))
-    ret_list.append(joke.get("Punchline"))
-    return ret_list 
 
-"""
 # jokes from reddit, for another day
 def get_joke():
     ret_list = []
@@ -418,15 +411,13 @@ def get_joke():
     ret_list.append(joke.selftext)
     return ret_list
 
-
-
+# gets a random post from subreddits "dadjoes" and "cleanjoks"
 def ask_reddit_for_joke():
     sub = ["dadjokes", "cleanjokes"]
     ret = reddit.subreddit(random.choice(sub)).random()
     return ret
 
-test =  ask_reddit_for_joke()
-
+# recursively loop 
 def find_okay_joke():
     joke = ask_reddit_for_joke()
     score = joke.score
@@ -436,17 +427,30 @@ def find_okay_joke():
         score = joke.score
     return joke 
 
+#get jpg url from animal subreddit
 def reddit_aww():
     sub = random.choice(ct.animal_subreddits)
     aww =  reddit.subreddit(sub)
     get_aww = aww.random()
     img_check = get_aww.url[-3:]
-    while img_check != "jpg":
+    img_format = ['jpg']
+    while img_check not in img_format:
         asyncio.sleep(2)
         get_aww = aww.random()
         img_check = get_aww.url[-3:]    
     return get_aww.url
 
+# generalized get random photo from flickr
+def get_flickr(kw):
+    flickr = flickrapi.FlickrAPI(hf.ham_key, hf.ham_sec, format='parsed-json')
+    photos = flickr.photos.search(text = kw, safe_search = 1, content_type = 1, sort = 'relevance', per_page = 250)
+    ham = photos.get('photos').get('photo')
+    pic_url = 'https://live.staticflickr.com/{}/{}_{}.jpg'
+    if len(ham) > 0:
+        rand_ham = random.choice(ham)
+        return pic_url.format(rand_ham.get('server'),rand_ham.get('id'),rand_ham.get('secret'))
+    else:
+        return "Could not find any pictures of {}".format(kw)
 
 # grab a joke from 'http://opentdb.com'
 def get_trivia(cat):
@@ -465,6 +469,19 @@ def get_trivia(cat):
         random.shuffle(mult_answ)
         ret_list[0] += "\n" + ", ".join(mult_answ)
     return ret_list 
+
+# get a youtube link from music subreddit
+def ask_reddit_song():
+    holder = None
+    while holder is None:
+        holder = reddit.subreddit(random.choice(ct.music)).random()
+    #print(holder.score, holder.url)
+    if holder.score >= 10 and holder.url.find("youtu") != -1:
+        ret = holder.url
+    else: 
+        asyncio.sleep(2)
+        ret = ask_reddit_song()
+    return ret
 
 # horoscope function
 def get_horoscope(sign):
