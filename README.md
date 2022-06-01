@@ -22,3 +22,6 @@ All members of the Discord server can use this tool to request to be pinged in t
 
 lwp_manager also comes with some functions to request user stats from lichess.  
 All data processing is handled in the bot_fictions.py script. 
+
+Some functions require credentials; those are generally stored in the helper.py file
+
