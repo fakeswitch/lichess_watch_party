@@ -13,10 +13,6 @@ handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w'
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
 logger.addHandler(handler)
 
-#logging.basicConfig(level=logging.INFO)
-#intents = discord.Intents.default()
-#intents.members = True
-
 #bot = commands.Bot(command_prefix='?', description=description, intents=intents)
 bot = commands.Bot(command_prefix='^')
 
@@ -29,6 +25,9 @@ async def on_ready():
     print('------')
 
 #------------------------------general user functrions ----------- 
+"""
+# apparently there is a built in function from discord.ext called "help" that takes care of this
+# i do need to figure out how to organize the commands though
 
 # get a list of commands this bot offers
 @bot.command()
@@ -40,8 +39,9 @@ async def lc_commands(ctx):
 @bot.command()
 @commands.cooldown(1,30, commands.BucketType.user)
 async def silly_commands(ctx):
-    retr_str = "^haiku, ^dice sides_on_die number_of rolls, ^coin, ^m8 yes_no_question, ^joke, ^aww, ^trivia, ^anime"
+    retr_str = "^haiku, ^dice sides_on_die number_of rolls, ^coin, ^m8 yes_no_question, ^joke, ^aww, ^trivia, ^anime, ^horo astro_sign, ^song"
     await ctx.send(retr_str)
+"""
 
 # who is currently playing
 @bot.command()
@@ -71,19 +71,21 @@ async def check(ctx, lichess):
 #-------------------follow/unfollow functions for discord ----------- 
 
 # follow a licess user
+# get a ping when specified player stars a game
 @bot.command()
 @commands.cooldown(1,10, commands.BucketType.user)
 async def follow(ctx, lichess):
     await ctx.send(bf.follow_player(ctx.message.content, str(ctx.author.mention)))
 
 # i've made a mistake and i want to follow anyone
+# get a ping when anyone on the watch list starts a game
 @bot.command()
 @commands.cooldown(1,300, commands.BucketType.user)
 async def follow_all(ctx):
     retr_str = bf.follow_everyone(str(ctx.author.mention))
     await ctx.send(retr_str)
 
-# list user is currently following
+# stop getting notifications for specific player
 @bot.command()
 @commands.cooldown(1,30, commands.BucketType.user)
 async def unfollow(ctx, lichess):
@@ -131,7 +133,7 @@ async def openings(ctx, *args):
 async def response(ctx, *args):
     await ctx.send(bf.get_top_open_black(args))
 
-
+# rebuilt openings function, combines the functions openings and response
 @bot.command()
 @commands.cooldown(1,15, commands.BucketType.user)
 async def opening2(ctx, lichess, color, moves, speeds):
@@ -157,6 +159,7 @@ async def haiku(ctx):
 async def dice(ctx, sides, num):
     await ctx.send(bf.roll_dice(int(sides), int(num)))
 
+# returns heads or tails
 @bot.command()
 @commands.cooldown(1,15, commands.BucketType.user)
 async def coin(ctx):
@@ -168,7 +171,7 @@ async def coin(ctx):
 async def m8(ctx, question):
     await ctx.send(bf.eightball())
 
-# get a joke from dadjokes.online
+# get a joke from reddit /r/cleanjokes and /r/dadjokes
 @bot.command()
 @commands.cooldown(1,17, commands.BucketType.guild)
 async def joke(ctx):
@@ -177,12 +180,24 @@ async def joke(ctx):
     await asyncio.sleep(12)
     await ctx.send(holder[1])
     
-# fetch jpg url from reddit
+# fetch jpg url from animal subreddits
 @bot.command()
 @commands.cooldown(1,15, commands.BucketType.guild)
 async def aww(ctx):
-    #holder = bf.get_joke()
     await ctx.send(bf.reddit_aww())
+
+# specifically, fetch a hamster jpg from flickr
+@bot.command()
+@commands.cooldown(1,15, commands.BucketType.guild)
+async def hamster(ctx):
+    await ctx.send(bf.get_flickr('cute hamster'))
+
+# fetch a jpg from flickr
+@bot.command()
+@commands.cooldown(1,10, commands.BucketType.guild)
+async def photo(ctx, kw):
+    holder = "Here's a picture of {}:\n".format(kw)
+    await ctx.send(holder + bf.get_flickr(kw))
 
 # get a trivia from opentdb.com
 @bot.command()
@@ -193,7 +208,6 @@ async def trivia(ctx):
     await asyncio.sleep(20)
     await ctx.send(holder[1])
 
-
 # get anime trivia from opentdb.com
 @bot.command()
 @commands.cooldown(1,25, commands.BucketType.guild)
@@ -202,6 +216,12 @@ async def anime(ctx):
     await ctx.send(holder[0])
     await asyncio.sleep(20)
     await ctx.send(holder[1])
+
+# get random song recommendation from reddit
+@bot.command()
+@commands.cooldown(1,60, commands.BucketType.guild)
+async def song(ctx):
+    await ctx.send(bf.ask_reddit_song())
 
 # give a horoscope!
 @bot.command()
