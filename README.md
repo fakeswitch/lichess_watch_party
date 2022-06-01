@@ -1,8 +1,9 @@
 # watch party emcee
-Encourage community engagement by keeping an eye out on who's currently playing games on lichess
 There is currently no notification system in lichess that lets people know when their friends are online and playing
 The intended use of this tool is to notify members of Discord Chess communities when fellow members are playing on lichess, so 
 they can view games in real time and cheer them on in the lichess spectator rooms
+
+These tools were designed to run on a raspberry pi 3 with a ubuntu os.  
 
 This bot requires a mysql db called watch_lichess with a table called watch_users
 The table should have two columns: handle(varchar) and status(bool)
